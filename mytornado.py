@@ -23,9 +23,10 @@ class OwnerHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         #verify that the data owner has connected with a valid token
         cookie = self.request.headers["cookie"]
+        id = int(self.request.headers["id"])
         if cookie is not None:
             print("firebase call to verify that the cookie is valid:" + cookie)
-            OwnerHandler.datasets[OwnerHandler.n] = self
+            OwnerHandler.datasets[id] = self
             OwnerHandler.n += 1
             print("firebase call to update the list of available servers")
 
@@ -46,7 +47,7 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
         cookie = self.request.headers["cookie"]
         if cookie is not None:
             print("firebase call to verify that the researcher cookie is valid:" + cookie) #also removes the token and returns the database id
-            self.dest = 0
+            self.dest = int(self.request.headers["id"])
             if dest not in ResearcherHandler.resMap.keys():
                 ResearcherHandler.resMap[OwnerHandler.datasets[self.dest]] = [self]
             else:
@@ -60,12 +61,12 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
         while(ResarcherHandler.resMap[OwnerHandler.datasets[self.dest]][0] is not self):
             sleep(1)
         OwnerHandler.datasets[self.dest].write_message(msg)
-        
+
 def make_app():
     return tornado.web.Application([
         (r"/", MainHandler),
         (r"/share", OwnerHandler),
-        (r"/research", ResarcherHandler)
+        (r"/research", ResearcherHandler)
     ])
 def check_origin(self, data):
     return True
