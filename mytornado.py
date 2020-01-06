@@ -23,7 +23,7 @@ class OwnerHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         #verify that the data owner has connected with a valid token
         cookie = self.request.headers["cookie"]
-        id = int(self.request.headers["id"])
+        id = 125
         if cookie is not None:
             print("firebase call to verify that the cookie is valid:" + cookie)
             OwnerHandler.datasets[id] = self
@@ -32,7 +32,7 @@ class OwnerHandler(tornado.websocket.WebSocketHandler):
 
     def on_close(self):
         print("an owner has disconnected, need to let firebase know")
-        OwnerHandler.datasets = {key: val for key, val in OwnerHandler.items() if val != self}
+        OwnerHandler.datasets = {key: val for key, val in OwnerHandler.datasets.items() if val != self}
 
     def on_message(self, msg):
         print("looking at which researcher is currently connected to this owner and forwarding them the message")
@@ -47,8 +47,8 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
         cookie = self.request.headers["cookie"]
         if cookie is not None:
             print("firebase call to verify that the researcher cookie is valid:" + cookie) #also removes the token and returns the database id
-            self.dest = int(self.request.headers["id"])
-            if dest not in ResearcherHandler.resMap.keys():
+            self.dest = 125
+            if self.dest not in ResearcherHandler.resMap.keys():
                 ResearcherHandler.resMap[OwnerHandler.datasets[self.dest]] = [self]
             else:
                 ResearcherHandler.resMap[OwnerHandler.datasets[self.dest]].append(self)
@@ -58,7 +58,7 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
 
     def on_message(self, msg):
         #only send the message if they are first in line, otherwise, wait
-        while(ResarcherHandler.resMap[OwnerHandler.datasets[self.dest]][0] is not self):
+        while(ResearcherHandler.resMap[OwnerHandler.datasets[self.dest]][0] is not self):
             sleep(1)
         OwnerHandler.datasets[self.dest].write_message(msg)
 
