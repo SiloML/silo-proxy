@@ -1,6 +1,7 @@
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
+
 class MainHandler(tornado.websocket.WebSocketHandler):
     waiters = []
     def open(self):
@@ -13,6 +14,7 @@ class MainHandler(tornado.websocket.WebSocketHandler):
     def on_message(self, msg):
         for waiter in MainHandler.waiters:
             waiter.write_message("someone said ", msg)
+
 class AcceptOwnerHandler(tornado.websocket.WebSocketHandler):
     async def open(self):
         #define the url using some firebase call
@@ -30,6 +32,7 @@ class AcceptOwnerHandler(tornado.websocket.WebSocketHandler):
         return
     async def on_message(self, msg):
         print("forwarding message")
+
 class AuthorizeUserHandler(tornado.websocket.WebSocketHandler):
     async def open(self):
         #define the url using some firebase call
@@ -46,7 +49,7 @@ class AuthorizeUserHandler(tornado.websocket.WebSocketHandler):
 def make_app():
     return tornado.web.Application([
         (r"/", MainHandler),
-        (r"/AcceptOwner", AcceptOwnerHandler),
+        (r"/AcceptOwner", MainHandler),
         (r"/AuthorizeUser", AuthorizeUserHandler)
     ])
 def check_origin(self, data):
