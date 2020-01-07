@@ -1,7 +1,7 @@
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
-import tornado.queue
+from tornado.queues import Queue
 
 class MainHandler(tornado.websocket.WebSocketHandler):
     waiters = []
@@ -33,11 +33,11 @@ class OwnerHandler(tornado.websocket.WebSocketHandler):
 
     def on_close(self):
         print("an owner has disconnected, need to let firebase know")
-        OwnerHandler.datasets.remove(self.id)
+        del OwnerHandler.datasets[self.id]
 
     def on_message(self, msg):
         print("looking at which researcher is currently connected to this owner and forwarding them the message")
-        if qsize(OwnerHandler.datasets[self][1]) > 0:
+        if OwnerHandler.datasets[self.id][1].qsize() > 0:
             ResearcherHandler.resMap[self].write_message(msg)
 
 class ResearcherHandler(tornado.websocket.WebSocketHandler):
