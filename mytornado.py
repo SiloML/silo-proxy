@@ -49,15 +49,16 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
         if cookie is not None:
             print("firebase call to verify that the researcher cookie is valid:" + cookie) #also removes the token and returns the database id
             self.dest = 125
+            print(self)
             await OwnerHandler.datasets[self.dest][1].put(self)
             ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] = self
 
-    async def on_close(self):
+    def on_close(self):
         print("researcher closing")
         if (ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] == self):
             print("removing")
-            async for item in OwnerHandler.datasets[self.dest][1]:
-                await OwnerHandler.datasets[self.dest][1].task_done()
+            OwnerHandler.datasets[self.dest][1].task_done()
+            print(OwnerHandler.datasets[self.dest][1].get_nowait())
 
     def on_message(self, msg):
         #only send the message if they are first in line
