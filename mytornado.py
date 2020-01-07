@@ -1,6 +1,7 @@
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
+import tornado.queue
 
 class MainHandler(tornado.websocket.WebSocketHandler):
     waiters = []
@@ -19,48 +20,44 @@ class MainHandler(tornado.websocket.WebSocketHandler):
 class OwnerHandler(tornado.websocket.WebSocketHandler):
     datasets = {}
     n = 0
-
+    id = 0
     def open(self):
         #verify that the data owner has connected with a valid token
         cookie = self.request.headers["cookie"]
-        id = 125
+        self.id = 125
         if cookie is not None:
             print("firebase call to verify that the cookie is valid:" + cookie)
-            OwnerHandler.datasets[id] = self
+            OwnerHandler.datasets[self.id] = (self, Queue(maxsize=1))
             OwnerHandler.n += 1
             print("firebase call to update the list of available servers")
 
     def on_close(self):
         print("an owner has disconnected, need to let firebase know")
-        OwnerHandler.datasets = {key: val for key, val in OwnerHandler.datasets.items() if val != self}
+        OwnerHandler.datasets.remove(self.id)
 
     def on_message(self, msg):
         print("looking at which researcher is currently connected to this owner and forwarding them the message")
-        if len(ResearcherHandler.resMap[self]) > 0:
-            ResearcherHandler.resMap[self][0].write_message(msg)
+        if qsize(OwnerHandler.datasets[self][1]) > 0:
+            ResearcherHandler.resMap[self].write_message(msg)
 
 class ResearcherHandler(tornado.websocket.WebSocketHandler):
     dest = 0
     resMap = {}
-    def open(self):
+    async def open(self):
         #verify that the researcher has connected with a valid token
         cookie = self.request.headers["cookie"]
         if cookie is not None:
             print("firebase call to verify that the researcher cookie is valid:" + cookie) #also removes the token and returns the database id
-            self.dest = 125
-            if self.dest not in ResearcherHandler.resMap.keys():
-                ResearcherHandler.resMap[OwnerHandler.datasets[self.dest]] = [self]
-            else:
-                ResearcherHandler.resMap[OwnerHandler.datasets[self.dest]].append(self)
+            await OwnerHandler.datasets[self.dest][1].put(self)
+            ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] = self
 
     def on_close(self):
-        ResearcherHandler.resMap[OwnerHandler.datasets[self.dest]].remove(self)
+        if (ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] == self):
+            OwnerHandler.datasets[self.dest][1].task_done()
 
     def on_message(self, msg):
-        #only send the message if they are first in line, otherwise, wait
-        while(ResearcherHandler.resMap[OwnerHandler.datasets[self.dest]][0] is not self):
-            sleep(1)
-        OwnerHandler.datasets[self.dest].write_message(msg)
+        #only send the message if they are first in line
+        OwnerHandler.datasets[self.dest][0].write_message(msg)
 
 def make_app():
     return tornado.web.Application([
