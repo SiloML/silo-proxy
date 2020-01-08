@@ -2,24 +2,10 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 from tornado.queues import Queue
-
-class MainHandler(tornado.websocket.WebSocketHandler):
-    waiters = []
-    check = 123
-    def open(self):
-        MainHandler.waiters.append(self)
-        print(self)
-        print("added")
-    def on_close(self):
-        MainHandler.waiters.remove(self)
-        print("do nothing")
-    def on_message(self, msg):
-        for waiter in MainHandler.waiters:
-            waiter.write_message("someone said ", msg)
+import requests
 
 class OwnerHandler(tornado.websocket.WebSocketHandler):
     datasets = {}
-    n = 0
     id = 0
     def open(self):
         #verify that the data owner has connected with a valid token
@@ -28,15 +14,18 @@ class OwnerHandler(tornado.websocket.WebSocketHandler):
             token, dataset = cookie.split(",")
             self.id = int(dataset)
             print("firebase call to verify that the cookie is valid:" + cookie)
-            OwnerHandler.datasets[self.id] = (self, Queue(maxsize=1))
-            OwnerHandler.n += 1
-            print("firebase call to update the list of available servers")
+            val = requests.get("http://us-central1-silo-ml.cloudfunctions.net/verifyOwnerToken", params={'token': token, 'dataset': dataset})
+            if (val.status_code == 200):
+                self.id = val.content
+                OwnerHandler.datasets[self.id] = (self, Queue(maxsize=1))
         else:
             return False
 
     def on_close(self):
         print("an owner has disconnected, need to let firebase know")
+        requests.get("http://us-central1-silo-ml.cloudfunctions.net/disconnectDevice", params={'dataset_id': dataset})
         del OwnerHandler.datasets[self.id]
+
 
     def on_message(self, msg):
         print("looking at which researcher is currently connected to this owner and forwarding them the message")
@@ -52,10 +41,12 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
         if cookie is not None:
             print("firebase call to verify that the researcher cookie is valid:" + cookie) #also removes the token and returns the database id
             token, dataset = cookie.split(",")
-            self.dest = int(dataset)
-            print(self)
-            await OwnerHandler.datasets[self.dest][1].put(self)
-            ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] = self
+            val = requests.get("http://us-central1-silo-ml.cloudfunctions.net/verifyResearcherToken", params={'token': token, 'dataset': dataset})
+            if (val.status_code == 200):
+                self.dest = dataset
+                print(self)
+                await OwnerHandler.datasets[self.dest][1].put(self)
+                ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] = self
         else:
             return False
 
@@ -72,10 +63,11 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
 
 def make_app():
     return tornado.web.Application([
-        (r"/", MainHandler),
+        (r"/", OwnerHandler),
         (r"/share", OwnerHandler),
         (r"/research", ResearcherHandler)
     ])
+
 def check_origin(self, data):
     return True
 if __name__ == "__main__":
