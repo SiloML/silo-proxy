@@ -12,14 +12,14 @@ class OwnerHandler(tornado.websocket.WebSocketHandler):
         cookie = self.request.headers["cookie"]
         if cookie is not None:
             token, dataset = cookie.split(",")
-            self.id = int(dataset)
+            self.id = dataset
             print("firebase call to verify that the cookie is valid:" + cookie)
             val = requests.get("http://us-central1-silo-ml.cloudfunctions.net/verifyOwnerToken", params={'token': token, 'dataset': dataset})
             if (val.status_code == 200):
-                self.id = val.content
+                self.id = val.text
                 OwnerHandler.datasets[self.id] = (self, Queue(maxsize=1))
-        else:
-            return False
+                return True
+        return False
 
     def on_close(self):
         print("an owner has disconnected, need to let firebase know")
@@ -47,8 +47,8 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
                 print(self)
                 await OwnerHandler.datasets[self.dest][1].put(self)
                 ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] = self
-        else:
-            return False
+                return True
+        return False
 
     def on_close(self):
         print("researcher closing")
