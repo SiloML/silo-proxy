@@ -47,14 +47,18 @@ class ResearcherHandler(tornado.websocket.WebSocketHandler):
                 print(self)
                 await OwnerHandler.datasets[self.dest][1].put(self)
                 ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] = self
+                requests.get("http://us-central1-silo-ml.cloudfunctions.net/setDeviceAsUnavailable", params={'dataset_id': self.dest})
+
 
 
     def on_close(self):
         print("researcher closing")
         if (ResearcherHandler.resMap[OwnerHandler.datasets[self.dest][0]] == self):
             print("removing")
+            requests.get("http://us-central1-silo-ml.cloudfunctions.net/setDeviceAsAvailable", params={'dataset_id': self.dest})
             OwnerHandler.datasets[self.dest][1].task_done()
             print(OwnerHandler.datasets[self.dest][1].get_nowait())
+
 
     def on_message(self, msg):
         #only send the message if they are first in line
